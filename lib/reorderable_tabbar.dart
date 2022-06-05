@@ -1357,6 +1357,16 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
                   }
                   if (oldIndex == _currentIndex) {
                     _controller!.animateTo(newIndex);
+                  } else if (oldIndex > (_currentIndex ?? 0)) {
+                    if (newIndex < (_currentIndex ?? 0)) {
+                      int index = (_currentIndex ?? 0);
+                      _controller!.animateTo(++index);
+                    }
+                  } else {
+                    if (newIndex > (_currentIndex ?? 0)) {
+                      int index = (_currentIndex ?? 0);
+                      _controller!.animateTo(--index);
+                    }
                   }
                 },
               ),
