@@ -1,3 +1,13 @@
+## Setup
+
+```yaml
+
+    dependencies:
+        reorderable_tabbar:
+            git: https://github.com/OrtakProje-1/reorderable_tabbar.git
+    
+```
+
 
 ## Example
 
