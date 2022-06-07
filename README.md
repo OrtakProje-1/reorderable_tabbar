@@ -4,7 +4,9 @@
 
     dependencies:
         reorderable_tabbar:
-            git: https://github.com/OrtakProje-1/reorderable_tabbar.git
+          git:
+            url: https://github.com/OrtakProje-1/reorderable_tabbar.git
+            ref: first_try
     
 ```
 
