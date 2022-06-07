@@ -1,13 +1,11 @@
-// Copyright 2014 The Flutter Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
+library reorderable_tababar;
 
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
+import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:tab_indicator_styler/tab_indicator_styler.dart';
 
 const double _kTabHeight = 46.0;
@@ -38,8 +36,6 @@ class _TabStyle extends AnimatedWidget {
     final TabBarTheme tabBarTheme = TabBarTheme.of(context);
     final Animation<double> animation = listenable as Animation<double>;
 
-    // To enable TextStyle.lerp(style1, style2, value), both styles must have
-    // the same value of inherit. Force that to be inherit=true here.
     final TextStyle defaultStyle = (labelStyle ??
             tabBarTheme.labelStyle ??
             themeData.primaryTextTheme.bodyText1!)
@@ -59,7 +55,7 @@ class _TabStyle extends AnimatedWidget {
         themeData.primaryTextTheme.bodyText1!.color!;
     final Color unselectedColor = unselectedLabelColor ??
         tabBarTheme.unselectedLabelColor ??
-        selectedColor.withAlpha(0xB2); // 70% alpha
+        selectedColor.withAlpha(0xB2);
     final Color color = selected
         ? Color.lerp(selectedColor, unselectedColor, animation.value)!
         : Color.lerp(unselectedColor, selectedColor, animation.value)!;
@@ -77,121 +73,15 @@ class _TabStyle extends AnimatedWidget {
   }
 }
 
-typedef _LayoutCallback = void Function(
-    List<double> xOffsets, TextDirection textDirection, double width);
-
-class _TabLabelBarRenderer extends RenderFlex {
-  _TabLabelBarRenderer({
-    List<RenderBox>? children,
-    required Axis direction,
-    required MainAxisSize mainAxisSize,
-    required MainAxisAlignment mainAxisAlignment,
-    required CrossAxisAlignment crossAxisAlignment,
-    required TextDirection textDirection,
-    required VerticalDirection verticalDirection,
-    required this.onPerformLayout,
-    required this.heightChanged,
-  })  : assert(onPerformLayout != null),
-        assert(textDirection != null),
-        super(
-          children: children,
-          direction: direction,
-          mainAxisSize: mainAxisSize,
-          mainAxisAlignment: mainAxisAlignment,
-          crossAxisAlignment: crossAxisAlignment,
-          textDirection: textDirection,
-          verticalDirection: verticalDirection,
-        );
-
-  _LayoutCallback onPerformLayout;
-  final ValueChanged<double> heightChanged;
-
-  @override
-  void performLayout() {
-    super.performLayout();
-    // xOffsets will contain childCount+1 values, giving the offsets of the
-    // leading edge of the first tab as the first value, of the leading edge of
-    // the each subsequent tab as each subsequent value, and of the trailing
-    // edge of the last tab as the last value.
-    RenderBox? child = firstChild;
-    final List<double> xOffsets = <double>[];
-    while (child != null) {
-      final FlexParentData childParentData =
-          child.parentData! as FlexParentData;
-      xOffsets.add(childParentData.offset.dx);
-      assert(child.parentData == childParentData);
-      child = childParentData.nextSibling;
-    }
-    assert(textDirection != null);
-    switch (textDirection!) {
-      case TextDirection.rtl:
-        xOffsets.insert(0, size.width);
-        break;
-      case TextDirection.ltr:
-        xOffsets.add(size.width);
-        break;
-    }
-    onPerformLayout(xOffsets, textDirection!, size.width);
-    heightChanged(size.height);
-  }
-}
-
-// This class and its renderer class only exist to report the widths of the tabs
-// upon layout. The tab widths are only used at paint time (see _IndicatorPainter)
-// or in response to input.
-class _TabLabelBar extends Flex {
-  _TabLabelBar({
-    Key? key,
-    List<Widget> children = const <Widget>[],
-    required this.onPerformLayout,
-    required this.heightChanged,
-  }) : super(
-          key: key,
-          children: children,
-          direction: Axis.horizontal,
-          mainAxisSize: MainAxisSize.max,
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          verticalDirection: VerticalDirection.down,
-        );
-
-  final _LayoutCallback onPerformLayout;
-  final ValueChanged<double> heightChanged;
-
-  @override
-  RenderFlex createRenderObject(BuildContext context) {
-    return _TabLabelBarRenderer(
-      direction: direction,
-      mainAxisAlignment: mainAxisAlignment,
-      mainAxisSize: mainAxisSize,
-      crossAxisAlignment: crossAxisAlignment,
-      textDirection: getEffectiveTextDirection(context)!,
-      verticalDirection: verticalDirection,
-      onPerformLayout: onPerformLayout,
-      heightChanged: heightChanged,
-    );
-  }
-
-  @override
-  void updateRenderObject(
-      BuildContext context, _TabLabelBarRenderer renderObject) {
-    super.updateRenderObject(context, renderObject);
-    renderObject.onPerformLayout = onPerformLayout;
-  }
-}
-
 double _indexChangeProgress(TabController controller) {
   final double controllerValue = controller.animation!.value;
   final double previousIndex = controller.previousIndex.toDouble();
   final double currentIndex = controller.index.toDouble();
 
-  // The controller's offset is changing because the user is dragging the
-  // TabBarView's PageView to the left or right.
   if (!controller.indexIsChanging) {
     return (currentIndex - controllerValue).abs().clamp(0.0, 1.0);
   }
 
-  // The TabController animation's value is changing from previousIndex to currentIndex.
   return (controllerValue - currentIndex).abs() /
       (currentIndex - previousIndex).abs();
 }
@@ -218,9 +108,6 @@ class _IndicatorPainter extends CustomPainter {
   final EdgeInsetsGeometry indicatorPadding;
   final List<GlobalKey> tabKeys;
 
-  // _currentTabOffsets and _currentTextDirection are set each time TabBar
-  // layout is completed. These values can be null when TabBar contains no
-  // tabs, since there are nothing to lay out.
   List<double>? _currentTabOffsets;
   TextDirection? _currentTextDirection;
 
@@ -240,8 +127,6 @@ class _IndicatorPainter extends CustomPainter {
     _currentTextDirection = textDirection;
   }
 
-  // _currentTabOffsets[index] is the offset of the start edge of the tab at index, and
-  // _currentTabOffsets[_currentTabOffsets.length] is the end edge of the last tab.
   int get maxTabIndex => _currentTabOffsets!.length - 2;
 
   double centerOf(int tabIndex) {
@@ -315,12 +200,14 @@ class _IndicatorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_IndicatorPainter old) {
-    return _needsPaint ||
+    bool rePaint = _needsPaint ||
         controller != old.controller ||
         indicator != old.indicator ||
         tabKeys.length != old.tabKeys.length ||
         (!listEquals(_currentTabOffsets, old._currentTabOffsets)) ||
         _currentTextDirection != old._currentTextDirection;
+
+    return rePaint;
   }
 }
 
@@ -377,121 +264,9 @@ class _DragAnimation extends Animation<double>
   }
 }
 
-// This class, and TabBarScrollController, only exist to handle the case
-// where a scrollable TabBar has a non-zero initialIndex. In that case we can
-// only compute the scroll position's initial scroll offset (the "correct"
-// pixels value) after the TabBar viewport width and scroll limits are known.
-class _TabBarScrollPosition extends ScrollPositionWithSingleContext {
-  _TabBarScrollPosition({
-    required ScrollPhysics physics,
-    required ScrollContext context,
-    required ScrollPosition? oldPosition,
-    required this.tabBar,
-  }) : super(
-          physics: physics,
-          context: context,
-          initialPixels: null,
-          oldPosition: oldPosition,
-        );
+typedef OnReorder = void Function(int, int);
 
-  final _ReorderableTabBarState tabBar;
-
-  bool? _initialViewportDimensionWasZero;
-
-  @override
-  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
-    bool result = true;
-    if (_initialViewportDimensionWasZero != true) {
-      // If the viewport never had a non-zero dimension, we just want to jump
-      // to the initial scroll position to avoid strange scrolling effects in
-      // release mode: In release mode, the viewport temporarily may have a
-      // dimension of zero before the actual dimension is calculated. In that
-      // scenario, setting the actual dimension would cause a strange scroll
-      // effect without this guard because the super call below would starts a
-      // ballistic scroll activity.
-      assert(viewportDimension != null);
-      _initialViewportDimensionWasZero = viewportDimension != 0.0;
-      correctPixels(tabBar._initialScrollOffset(
-          viewportDimension, minScrollExtent, maxScrollExtent));
-      result = false;
-    }
-    return super.applyContentDimensions(minScrollExtent, maxScrollExtent) &&
-        result;
-  }
-}
-
-// This class, and TabBarScrollPosition, only exist to handle the case
-// where a scrollable TabBar has a non-zero initialIndex.
-class _TabBarScrollController extends ScrollController {
-  _TabBarScrollController(this.tabBar);
-
-  final _ReorderableTabBarState tabBar;
-
-  @override
-  ScrollPosition createScrollPosition(ScrollPhysics physics,
-      ScrollContext context, ScrollPosition? oldPosition) {
-    return _TabBarScrollPosition(
-      physics: physics,
-      context: context,
-      oldPosition: oldPosition,
-      tabBar: tabBar,
-    );
-  }
-}
-
-typedef OnReorder = Future<bool> Function(int, int);
-typedef OnLongPress = Future<bool> Function(GlobalKey, int);
-
-/// A material design widget that displays a horizontal row of tabs.
-///
-/// Typically created as the [AppBar.bottom] part of an [AppBar] and in
-/// conjunction with a [TabBarView].
-///
-/// {@youtube 560 315 https://www.youtube.com/watch?v=POtoEH-5l40}
-///
-/// If a [TabController] is not provided, then a [DefaultTabController] ancestor
-/// must be provided instead. The tab controller's [TabController.length] must
-/// equal the length of the [tabs] list and the length of the
-/// [TabBarView.children] list.
-///
-/// Requires one of its ancestors to be a [Material] widget.
-///
-/// Uses values from [TabBarTheme] if it is set in the current context.
-///
-/// {@tool dartpad}
-/// This sample shows the implementation of [ReorderableTabBar] and [TabBarView] using a [DefaultTabController].
-/// Each [Tab] corresponds to a child of the [TabBarView] in the order they are written.
-///
-/// ** See code in examples/api/lib/material/tabs/tab_bar.0.dart **
-/// {@end-tool}
-///
-/// {@tool dartpad}
-/// [ReorderableTabBar] can also be implemented by using a [TabController] which provides more options
-/// to control the behavior of the [ReorderableTabBar] and [TabBarView]. This can be used instead of
-/// a [DefaultTabController], demonstrated below.
-///
-/// ** See code in examples/api/lib/material/tabs/tab_bar.1.dart **
-/// {@end-tool}
-///
-/// See also:
-///
-///  * [TabBarView], which displays page views that correspond to each tab.
-///  * [ReorderableTabBar], which is used to display the [Tab] that corresponds to each page of the [TabBarView].
 class ReorderableTabBar extends StatefulWidget implements PreferredSizeWidget {
-  /// Creates a material design tab bar.
-  ///
-  /// The [tabs] argument must not be null and its length must match the [controller]'s
-  /// [TabController.length].
-  ///
-  /// If a [TabController] is not provided, then there must be a
-  /// [DefaultTabController] ancestor.
-  ///
-  /// The [indicatorWeight] parameter defaults to 2, and must not be null.
-  ///
-  /// The [indicatorPadding] parameter defaults to [EdgeInsets.zero], and must not be null.
-  ///
-  /// If [indicator] is not null or provided from [TabBarTheme],
-  /// then [indicatorWeight], [indicatorPadding], and [indicatorColor] are ignored.
   const ReorderableTabBar({
     Key? key,
     required this.tabs,
@@ -515,18 +290,11 @@ class ReorderableTabBar extends StatefulWidget implements PreferredSizeWidget {
     this.enableFeedback,
     this.onTap,
     this.physics,
-    this.submitIcon = Icons.check_rounded,
-    this.submitIconHorizontalPadding = 4,
-    this.submitIconColor = Colors.white,
-    this.submitIconSize = 24,
     this.onReorder,
-    this.submitIconSplashColor = Colors.white24,
-    this.onLongPress,
     this.defaultIndicator = false,
-    this.longPressTabBackgroundColor = Colors.white24,
     this.tabBorderRadius,
-    this.tabSplashColor,
     this.reorderingTabBackgroundColor,
+    this.tabBackgroundColor,
   })  : assert(tabs != null),
         assert(isScrollable != null),
         assert(dragStartBehavior != null),
@@ -535,228 +303,58 @@ class ReorderableTabBar extends StatefulWidget implements PreferredSizeWidget {
         assert(indicator != null || (indicatorPadding != null)),
         super(key: key);
 
-  ///  if returned value is true shows reorder
-  final OnLongPress? onLongPress;
-
   final BorderRadius? tabBorderRadius;
 
-  /// show default UnderlineTabIndicator
+  final Color? tabBackgroundColor;
+
   final bool defaultIndicator;
 
-  /// Widget temp = children.removeAt(oldIndex);
-  ///
-  /// children.insert(newIndex, temp);
   final OnReorder? onReorder;
-
-  /// reorder submit icon
-  final IconData submitIcon;
-
-  /// reorder submit icon splash color
-  final Color submitIconSplashColor;
 
   final Color? reorderingTabBackgroundColor;
 
-  final Color? tabSplashColor;
-
-  final Color longPressTabBackgroundColor;
-
-  /// reorder submit icon color
-  final Color submitIconColor;
-
-  /// submit icon horizontal padding
-  final double submitIconHorizontalPadding;
-
-  final double submitIconSize;
-
-  /// Typically a list of two or more [Tab] widgets.
-  ///
-  /// The length of this list must match the [controller]'s [TabController.length]
-  /// and the length of the [TabBarView.children] list.
   final List<Widget> tabs;
 
-  /// This widget's selection and animation state.
-  ///
-  /// If [TabController] is not provided, then the value of [DefaultTabController.of]
-  /// will be used.
   final TabController? controller;
 
-  /// Whether this tab bar can be scrolled horizontally.
-  ///
-  /// If [isScrollable] is true, then each tab is as wide as needed for its label
-  /// and the entire [ReorderableTabBar] is scrollable. Otherwise each tab gets an equal
-  /// share of the available space.
   final bool isScrollable;
 
-  /// The amount of space by which to inset the tab bar.
-  ///
-  /// When [isScrollable] is false, this will yield the same result as if you had wrapped your
-  /// [ReorderableTabBar] in a [Padding] widget. When [isScrollable] is true, the scrollable itself is inset,
-  /// allowing the padding to scroll with the tab bar, rather than enclosing it.
   final EdgeInsetsGeometry? padding;
 
-  /// The color of the line that appears below the selected tab.
-  ///
-  /// If this parameter is null, then the value of the Theme's indicatorColor
-  /// property is used.
-  ///
-  /// If [indicator] is specified or provided from [TabBarTheme],
-  /// this property is ignored.
   final Color? indicatorColor;
 
-  /// The thickness of the line that appears below the selected tab.
-  ///
-  /// The value of this parameter must be greater than zero and its default
-  /// value is 2.0.
-  ///
-  /// If [indicator] is specified or provided from [TabBarTheme],
-  /// this property is ignored.
   final double indicatorWeight;
 
-  /// Padding for indicator.
-  /// This property will now no longer be ignored even if indicator is declared
-  /// or provided by [TabBarTheme]
-  ///
-  /// For [isScrollable] tab bars, specifying [kTabLabelPadding] will align
-  /// the indicator with the tab's text for [Tab] widgets and all but the
-  /// shortest [Tab.text] values.
-  ///
-  /// The default value of [indicatorPadding] is [EdgeInsets.zero].
   final EdgeInsetsGeometry indicatorPadding;
 
-  /// Defines the appearance of the selected tab indicator.
-  ///
-  /// If [indicator] is specified or provided from [TabBarTheme],
-  /// the [indicatorColor], and [indicatorWeight] properties are ignored.
-  ///
-  /// The default, underline-style, selected tab indicator can be defined with
-  /// [MaterialIndicator].
-  ///
-  /// The indicator's size is based on the tab's bounds. If [indicatorSize]
-  /// is [TabBarIndicatorSize.tab] the tab's bounds are as wide as the space
-  /// occupied by the tab in the tab bar. If [indicatorSize] is
-  /// [TabBarIndicatorSize.label], then the tab's bounds are only as wide as
-  /// the tab widget itself.
-  /// Example Indicators:
-  ///   1) `UnderLineTabIndicator`
-  ///   2) `MaterialIndicator`
-  ///   3) `RectangularIndicator`
-  ///   4) `DotIndicator`
   final Decoration? indicator;
 
-  /// Whether this tab bar should automatically adjust the [indicatorColor].
-  ///
-  /// If [automaticIndicatorColorAdjustment] is true,
-  /// then the [indicatorColor] will be automatically adjusted to [Colors.white]
-  /// when the [indicatorColor] is same as [Material.color] of the [Material] parent widget.
   final bool automaticIndicatorColorAdjustment;
 
-  /// Defines how the selected tab indicator's size is computed.
-  ///
-  /// The size of the selected tab indicator is defined relative to the
-  /// tab's overall bounds if [indicatorSize] is [TabBarIndicatorSize.tab]
-  /// (the default) or relative to the bounds of the tab's widget if
-  /// [indicatorSize] is [TabBarIndicatorSize.label].
-  ///
-  /// The selected tab's location appearance can be refined further with
-  /// the [indicatorColor], [indicatorWeight], [indicatorPadding], and
-  /// [indicator] properties.
   final TabBarIndicatorSize? indicatorSize;
 
-  /// The color of selected tab labels.
-  ///
-  /// Unselected tab labels are rendered with the same color rendered at 70%
-  /// opacity unless [unselectedLabelColor] is non-null.
-  ///
-  /// If this parameter is null, then the color of the [ThemeData.primaryTextTheme]'s
-  /// bodyText1 text color is used.
   final Color? labelColor;
 
-  /// The color of unselected tab labels.
-  ///
-  /// If this property is null, unselected tab labels are rendered with the
-  /// [labelColor] with 70% opacity.
   final Color? unselectedLabelColor;
 
-  /// The text style of the selected tab labels.
-  ///
-  /// If [unselectedLabelStyle] is null, then this text style will be used for
-  /// both selected and unselected label styles.
-  ///
-  /// If this property is null, then the text style of the
-  /// [ThemeData.primaryTextTheme]'s bodyText1 definition is used.
   final TextStyle? labelStyle;
 
-  /// The padding added to each of the tab labels.
-  ///
-  /// If there are few tabs with both icon and text and few
-  /// tabs with only icon or text, this padding is vertically
-  /// adjusted to provide uniform padding to all tabs.
-  ///
-  /// If this property is null, then kTabLabelPadding is used.
   final EdgeInsetsGeometry? labelPadding;
 
-  /// The text style of the unselected tab labels.
-  ///
-  /// If this property is null, then the [labelStyle] value is used. If [labelStyle]
-  /// is null, then the text style of the [ThemeData.primaryTextTheme]'s
-  /// bodyText1 definition is used.
   final TextStyle? unselectedLabelStyle;
 
-  /// Defines the ink response focus, hover, and splash colors.
-  ///
-  /// If non-null, it is resolved against one of [MaterialState.focused],
-  /// [MaterialState.hovered], and [MaterialState.pressed].
-  ///
-  /// [MaterialState.pressed] triggers a ripple (an ink splash), per
-  /// the current Material Design spec. The [overlayColor] doesn't map
-  /// a state to [InkResponse.highlightColor] because a separate highlight
-  /// is not used by the current design guidelines. See
-  /// https://material.io/design/interaction/states.html#pressed
-  ///
-  /// If the overlay color is null or resolves to null, then the default values
-  /// for [InkResponse.focusColor], [InkResponse.hoverColor], [InkResponse.splashColor]
-  /// will be used instead.
   final MaterialStateProperty<Color?>? overlayColor;
 
-  /// {@macro flutter.widgets.scrollable.dragStartBehavior}
   final DragStartBehavior dragStartBehavior;
 
-  /// The cursor for a mouse pointer when it enters or is hovering over the
-  /// individual tab widgets.
-  ///
-  /// If this property is null, [SystemMouseCursors.click] will be used.
   final MouseCursor? mouseCursor;
 
-  /// Whether detected gestures should provide acoustic and/or haptic feedback.
-  ///
-  /// For example, on Android a tap will produce a clicking sound and a long-press
-  /// will produce a short vibration, when feedback is enabled.
-  ///
-  /// Defaults to true.
   final bool? enableFeedback;
 
-  /// An optional callback that's called when the [ReorderableTabBar] is tapped.
-  ///
-  /// The callback is applied to the index of the tab where the tap occurred.
-  ///
-  /// This callback has no effect on the default handling of taps. It's for
-  /// applications that want to do a little extra work when a tab is tapped,
-  /// even if the tap doesn't change the TabController's index. TabBar [onTap]
-  /// callbacks should not make changes to the TabController since that would
-  /// interfere with the default tap handler.
   final ValueChanged<int>? onTap;
 
-  /// How the [ReorderableTabBar]'s scroll view should respond to user input.
-  ///
-  /// For example, determines how the scroll view continues to animate after the
-  /// user stops dragging the scroll view.
-  ///
-  /// Defaults to matching platform conventions.
   final ScrollPhysics? physics;
 
-  /// A size whose height depends on if the tabs have both icons and text.
-  ///
-  /// [AppBar] uses this size to compute its own preferred size.
   @override
   Size get preferredSize {
     double maxHeight = _kTabHeight;
@@ -769,11 +367,6 @@ class ReorderableTabBar extends StatefulWidget implements PreferredSizeWidget {
     return Size.fromHeight(maxHeight + indicatorWeight);
   }
 
-  /// Returns whether the [ReorderableTabBar] contains a tab with both text and icon.
-  ///
-  /// [ReorderableTabBar] uses this to give uniform padding to all tabs in cases where
-  /// there are some tabs with both text and icon and some which contain only
-  /// text or icon.
   bool get tabHasTextAndIcon {
     for (final Widget item in tabs) {
       if (item is PreferredSizeWidget) {
@@ -791,17 +384,27 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
   ScrollController? _scrollController;
   TabController? _controller;
   _IndicatorPainter? _indicatorPainter;
+  ScrollController? _reorderController;
   int? _currentIndex;
   double? _tabStripWidth;
+  List<double> xOffsets = [];
+  double? height;
+  bool isScrollToCurrentIndex = false;
+  Reordered? isReordered;
+  late double screenWidth;
   late List<GlobalKey> _tabKeys;
+  late List<GlobalKey> _tabExtendKeys;
+  late LinkedScrollControllerGroup _controllers;
 
   @override
   void initState() {
     super.initState();
 
-    // If indicatorSize is TabIndicatorSize.label, _tabKeys[i] is used to find
-    // the width of tab widget i. See _IndicatorPainter.indicatorRect().
+    _controllers = LinkedScrollControllerGroup();
+    _reorderController = _controllers.addAndGet();
+    _scrollController = _controllers.addAndGet();
     _tabKeys = widget.tabs.map((Widget tab) => GlobalKey()).toList();
+    _tabExtendKeys = widget.tabs.map((Widget tab) => GlobalKey()).toList();
   }
 
   Decoration get _indicator {
@@ -810,19 +413,7 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
     if (tabBarTheme.indicator != null) return tabBarTheme.indicator!;
 
     Color color = widget.indicatorColor ?? Theme.of(context).indicatorColor;
-    // ThemeData tries to avoid this by having indicatorColor avoid being the
-    // primaryColor. However, it's possible that the tab bar is on a
-    // Material that isn't the primaryColor. In that case, if the indicator
-    // color ends up matching the material's color, then this overrides it.
-    // When that happens, automatic transitions of the theme will likely look
-    // ugly as the indicator color suddenly snaps to white at one end, but it's
-    // not clear how to avoid that any further.
-    //
-    // The material's color might be null (if it's a transparency). In that case
-    // there's no good way for us to find out what the color is so we don't.
-    //
-    // with a better long-term solution.
-    // https://github.com/flutter/flutter/pull/68171#pullrequestreview-517753917
+
     if (widget.automaticIndicatorColorAdjustment &&
         color.value == Material.of(context)?.color?.value) color = Colors.white;
 
@@ -842,9 +433,6 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
     );
   }
 
-  // If the TabBar is rebuilt with a new tab controller, the caller should
-  // dispose the old one. In that case the old controller's animation will be
-  // null and should not be accessed.
   bool get _controllerIsValid => _controller?.animation != null;
 
   void _updateTabController() {
@@ -895,6 +483,7 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     assert(debugCheckHasMaterial(context));
+    screenWidth = MediaQuery.of(context).size.width;
     _updateTabController();
     _initIndicatorPainter();
   }
@@ -916,20 +505,21 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
     if (widget.tabs.length > oldWidget.tabs.length) {
       final int delta = widget.tabs.length - oldWidget.tabs.length;
       _tabKeys.addAll(List<GlobalKey>.generate(delta, (int n) => GlobalKey()));
-      disableReorderable();
+      _tabExtendKeys
+          .addAll(List<GlobalKey>.generate(delta, (int n) => GlobalKey()));
     } else if (widget.tabs.length < oldWidget.tabs.length) {
       _tabKeys.removeRange(widget.tabs.length, oldWidget.tabs.length);
-      disableReorderable();
+      _tabExtendKeys.removeRange(widget.tabs.length, oldWidget.tabs.length);
     }
-  }
-
-  disableReorderable() {
-    if (_isReorderable) {
-      // WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
-      setState(() {
-        _isReorderable = false;
-      });
-      // });
+    if (!listEquals(oldWidget.tabs, widget.tabs)) {
+      if (isReordered != null) {
+        _scrollToNewCurrentIndex();
+      }
+    }
+    if (oldWidget.isScrollable != widget.isScrollable) {
+      if (widget.isScrollable) {
+        isScrollToCurrentIndex = true;
+      }
     }
   }
 
@@ -941,7 +531,7 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
       _controller!.removeListener(_handleTabControllerTick);
     }
     _controller = null;
-    // We don't own the _controller Animation, so it's not disposed here.
+
     super.dispose();
   }
 
@@ -950,9 +540,7 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
   double _tabScrollOffset(
       int index, double viewportWidth, double minExtent, double maxExtent) {
     if (!widget.isScrollable) return 0.0;
-    if (_isReorderable) {
-      if ((_reorderController?.positions ?? []).isEmpty) return 0;
-    }
+
     double tabCenter = _indicatorPainter!.centerOf(index);
     switch (Directionality.of(context)) {
       case TextDirection.rtl:
@@ -965,39 +553,30 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
   }
 
   double _tabCenteredScrollOffset(int index) {
-    final ScrollPosition? position = _isReorderable
-        ? _reorderController?.position
-        : _scrollController!.position;
+    final ScrollPosition? position = _reorderController?.position;
 
-    return _tabScrollOffset(index, position?.viewportDimension ?? 100,
-        position?.minScrollExtent ?? 0, position?.maxScrollExtent ?? 10);
+    return _tabScrollOffset(
+        index,
+        position?.viewportDimension ?? screenWidth,
+        position?.minScrollExtent ?? 0,
+        position?.maxScrollExtent ?? screenWidth);
   }
 
-  double _initialScrollOffset(
-      double viewportWidth, double minExtent, double maxExtent) {
-    return _tabScrollOffset(
-        _currentIndex!, viewportWidth, minExtent, maxExtent);
+  void _initialScrollOffset() {
+    if (!widget.isScrollable) {
+      _controllers.animateTo(0.01,
+          curve: Curves.linear, duration: const Duration(milliseconds: 1));
+    }
   }
 
   void _scrollToCurrentIndex() {
-    if (_isReorderable) {
-      if ((_reorderController?.positions ?? []).isEmpty) return;
-    }
-
     final double offset = _tabCenteredScrollOffset(_currentIndex!);
-    if (_isReorderable) {
-      _reorderController?.animateTo(offset,
-          duration: kTabScrollDuration, curve: Curves.ease);
-    } else {
-      _scrollController!
-          .animateTo(offset, duration: kTabScrollDuration, curve: Curves.ease);
-    }
+
+    _controllers.animateTo(offset,
+        duration: kTabScrollDuration, curve: Curves.ease);
   }
 
   void _scrollToControllerValue() {
-    if (_isReorderable) {
-      if ((_reorderController?.positions ?? []).isEmpty) return;
-    }
     final double? leadingPosition = _currentIndex! > 0
         ? _tabCenteredScrollOffset(_currentIndex! - 1)
         : null;
@@ -1025,22 +604,14 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
           : lerpDouble(middlePosition, trailingPosition, value - index)!;
     }
 
-    if (_isReorderable) {
-      _reorderController?.jumpTo(offset);
-    } else {
-      _scrollController!.jumpTo(offset);
-    }
+    _controllers.jumpTo(offset);
   }
 
   void _handleTabControllerAnimationTick() {
     assert(mounted);
     if (!_controller!.indexIsChanging && widget.isScrollable) {
-      // Sync the TabBar's scroll position with the TabBarView's PageView.
       _currentIndex = _controller!.index;
       _scrollToControllerValue();
-    }
-    if (_isReorderable) {
-      setState(() {});
     }
   }
 
@@ -1049,48 +620,20 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
       _currentIndex = _controller!.index;
       if (widget.isScrollable) _scrollToCurrentIndex();
     }
-
-    setState(() {
-      // Rebuild the tabs after a (potentially animated) index change
-      // has completed.
-    });
+    setState(() {});
   }
 
-  // Called each time layout completes.
   void _saveTabOffsets(
       List<double> tabOffsets, TextDirection textDirection, double width) {
+    xOffsets = tabOffsets;
+    _tabStripWidth = width;
     _indicatorPainter?.saveTabOffsets(tabOffsets, textDirection);
   }
 
   void _handleTap(int index) async {
     assert(index >= 0 && index < widget.tabs.length);
-
     _controller!.animateTo(index);
     widget.onTap?.call(index);
-  }
-
-  bool _isReorderable = false;
-  ScrollController? _reorderController;
-  int? longPressIndex;
-
-  void _handleLongPress(int index) async {
-    assert(index >= 0 && index < widget.tabs.length);
-
-    bool res = true;
-    if (widget.onLongPress != null) {
-      setState(() {
-        longPressIndex = index;
-      });
-      res = await widget.onLongPress!(_tabKeys[index], index);
-      setState(() {
-        longPressIndex = null;
-      });
-    }
-    if (res) {
-      setState(() {
-        _isReorderable = true;
-      });
-    }
   }
 
   Widget _buildStyledTab(
@@ -1106,7 +649,66 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
     );
   }
 
-  double? height;
+  calculateTabStripWidth() {
+    WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
+      double width = 0;
+      List<double> offsets = [0];
+      TextDirection textDirection = Directionality.maybeOf(context)!;
+      for (var key in (textDirection == TextDirection.rtl
+          ? _tabExtendKeys.reversed.toList()
+          : _tabExtendKeys)) {
+        width += key.currentContext?.size?.width ?? 40;
+        switch (textDirection) {
+          case TextDirection.rtl:
+            offsets.insert(0, width);
+            break;
+          case TextDirection.ltr:
+            offsets.add(width);
+            break;
+        }
+      }
+      if ((_tabStripWidth ?? 0).floor() != width.floor() ||
+          !listEquals<double>(offsets, xOffsets)) {
+        _saveTabOffsets(offsets, textDirection, width);
+        if (!widget.isScrollable) {
+          _initialScrollOffset();
+        }
+        setState(() {});
+      }
+
+      if (isScrollToCurrentIndex) {
+        _scrollToCurrentIndex();
+        isScrollToCurrentIndex = false;
+      }
+    });
+  }
+
+  void _scrollToNewCurrentIndex() {
+    int oldIndex = isReordered!.oldIndex;
+    int newIndex = isReordered!.newIndex;
+
+    if (oldIndex == _currentIndex) {
+      _checkAndAnimateTo(newIndex);
+    } else if (oldIndex > (_currentIndex ?? 0)) {
+      if (newIndex < (_currentIndex ?? 0) || newIndex == _currentIndex) {
+        int index = (_currentIndex ?? 0);
+        _checkAndAnimateTo(++index);
+      }
+    } else {
+      if (newIndex > (_currentIndex ?? 0) || newIndex == _currentIndex) {
+        int index = (_currentIndex ?? 0);
+        _checkAndAnimateTo(--index);
+      }
+    }
+
+    isReordered = null;
+  }
+
+  _checkAndAnimateTo(int index) {
+    if (index < widget.tabs.length) {
+      _controller!.animateTo(index);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1165,14 +767,11 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
         ),
       );
     });
-    // If the controller was provided by DefaultTabController and we're part
-    // of a Hero (typically the AppBar), then we will not be able to find the
-    // controller during a Hero transition. See https://github.com/flutter/flutter/issues/213.
+
     if (_controller != null) {
       final int previousIndex = _controller!.previousIndex;
 
       if (_controller!.indexIsChanging) {
-        // The user tapped on a tab, the tab controller's animation is running.
         assert(_currentIndex != previousIndex);
         final Animation<double> animation = _ChangeAnimation(_controller!);
         wrappedTabs[_currentIndex!] =
@@ -1180,7 +779,6 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
         wrappedTabs[previousIndex] =
             _buildStyledTab(wrappedTabs[previousIndex], false, animation);
       } else {
-        // The user is dragging the TabBarView's PageView left or right.
         final int tabIndex = _currentIndex!;
         final Animation<double> centerAnimation =
             _DragAnimation(_controller!, tabIndex);
@@ -1203,31 +801,20 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
       }
     }
 
-    // Add the tap handler to each tab. If the tab bar is not scrollable,
-    // then give all of the tabs equal flexibility so that they each occupy
-    // the same share of the tab bar's overall width.
     final int tabCount = widget.tabs.length;
     for (int index = 0; index < tabCount; index += 1) {
       wrappedTabs[index] = InkWell(
-        splashColor: widget.tabSplashColor,
         borderRadius: widget.tabBorderRadius,
         mouseCursor: widget.mouseCursor ?? SystemMouseCursors.click,
         onTap: () async {
           _handleTap(index);
         },
-        onLongPress: _isReorderable
-            ? null
-            : () async {
-                _handleLongPress(index);
-              },
         enableFeedback: widget.enableFeedback ?? true,
         overlayColor: widget.overlayColor,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: widget.tabBorderRadius,
-            color: index == longPressIndex
-                ? widget.longPressTabBackgroundColor
-                : null,
+            color: widget.tabBackgroundColor,
           ),
           child: Padding(
             padding: EdgeInsets.only(bottom: widget.indicatorWeight),
@@ -1244,14 +831,23 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
           ),
         ),
       );
-      if (!widget.isScrollable && !_isReorderable) {
-        wrappedTabs[index] = Expanded(child: wrappedTabs[index]);
-      }
     }
     Widget? tabBar;
-    if (!_isReorderable) {
-      tabBar = CustomPaint(
-        painter: _indicatorPainter,
+
+    height ??= widget.preferredSize.height;
+
+    double? tabWidth;
+    if (!widget.isScrollable) {
+      tabWidth = (screenWidth - (widget.padding?.horizontal ?? 0)) /
+          wrappedTabs.length;
+    }
+    for (var i = 0; i < wrappedTabs.length; i++) {
+      Widget child = wrappedTabs[i];
+
+      wrappedTabs[i] = SizedBox(
+        key: _tabExtendKeys[i],
+        width: tabWidth,
+        height: height,
         child: _TabStyle(
           animation: kAlwaysDismissedAnimation,
           selected: false,
@@ -1259,208 +855,88 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
           unselectedLabelColor: widget.unselectedLabelColor,
           labelStyle: widget.labelStyle,
           unselectedLabelStyle: widget.unselectedLabelStyle,
-          child: _TabLabelBar(
-            onPerformLayout: _saveTabOffsets,
-            children: wrappedTabs,
-            heightChanged: (height) {
-              this.height = height;
-            },
-          ),
+          child: child,
         ),
       );
     }
-
-    if (widget.isScrollable && !_isReorderable) {
-      _scrollController ??= _TabBarScrollController(this);
-      tabBar = Align(
-        alignment: Alignment.centerLeft,
-        child: SingleChildScrollView(
-          dragStartBehavior: widget.dragStartBehavior,
-          scrollDirection: Axis.horizontal,
-          controller: _scrollController,
-          padding: widget.padding,
-          physics: widget.physics,
-          child: tabBar,
+    tabBar = Stack(
+      children: [
+        SizedBox(
+          height: height,
+          width: double.maxFinite,
+          child: ReorderableListView(
+            physics: widget.physics,
+            scrollController: _reorderController,
+            scrollDirection: Axis.horizontal,
+            children: wrappedTabs,
+            proxyDecorator: (child, index, anim) {
+              return Material(
+                color:
+                    widget.reorderingTabBackgroundColor ?? Colors.transparent,
+                borderRadius: widget.tabBorderRadius,
+                child: child,
+              );
+            },
+            onReorder: (oldIndex, newIndex) async {
+              if (oldIndex < newIndex) {
+                newIndex--;
+              }
+              if (widget.onReorder != null) {
+                isReordered = Reordered(
+                  oldIndex: oldIndex,
+                  newIndex: newIndex,
+                );
+                widget.onReorder!(oldIndex, newIndex);
+              }
+            },
+          ),
         ),
-      );
-    } else if (widget.padding != null) {
+        if (_tabStripWidth != null) getIndicatorPainter(),
+      ],
+    );
+    if (widget.padding != null) {
       tabBar = Padding(
         padding: widget.padding!,
         child: tabBar,
       );
     }
+    calculateTabStripWidth();
+    return tabBar;
+  }
 
-    height ??= widget.preferredSize.height;
-
-    if (_isReorderable) {
-      double? tabWidth;
-      if (!widget.isScrollable) {
-        double width =
-            (MediaQuery.of(context).size.width - getTotalSubmitWidth);
-        tabWidth = width / wrappedTabs.length;
+  Positioned getIndicatorPainter() {
+    double width = _tabStripWidth!;
+    if (!widget.isScrollable) {
+      if (width > (screenWidth - (widget.padding?.horizontal ?? 0))) {
+        width = screenWidth - (widget.padding?.horizontal ?? 0);
       }
-      List<Widget> newTabs = [];
-      for (var i = 0; i < wrappedTabs.length; i++) {
-        Widget child = wrappedTabs[i];
-
-        newTabs.add(
-          SizedBox(
-            key: Key("SizedBox [" + i.toString() + "]"),
-            width: tabWidth,
-            height: widget.preferredSize.height,
-            child: _TabStyle(
-              animation: kAlwaysDismissedAnimation,
-              selected: false,
-              labelColor: widget.labelColor,
-              unselectedLabelColor: widget.unselectedLabelColor,
-              labelStyle: widget.labelStyle,
-              unselectedLabelStyle: widget.unselectedLabelStyle,
-              child: child,
-            ),
-          ),
-        );
-      }
-      wrappedTabs.clear();
-      wrappedTabs.addAll(newTabs);
-      _reorderController ??= ScrollController();
-      tabBar = SizedBox(
-        height: height,
-        width: double.maxFinite,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: ReorderableListView(
-                scrollController: _reorderController,
-                scrollDirection: Axis.horizontal,
-                children: wrappedTabs,
-                proxyDecorator: (child, index, anim) {
-                  return Material(
-                    color: widget.reorderingTabBackgroundColor ??
-                        Colors.transparent,
-                    borderRadius: widget.tabBorderRadius,
-                    child: child,
-                  );
-                },
-                onReorder: (oldIndex, newIndex) async {
-                  if (oldIndex < newIndex) {
-                    newIndex--;
-                  }
-                  if (widget.onReorder != null) {
-                    bool closeReorder =
-                        await widget.onReorder!(oldIndex, newIndex);
-                    if (closeReorder) {
-                      setState(() {
-                        _isReorderable = false;
-                      });
-                    }
-                  }
-                  if (oldIndex == _currentIndex) {
-                    _controller!.animateTo(newIndex);
-                  } else if (oldIndex > (_currentIndex ?? 0)) {
-                    if (newIndex < (_currentIndex ?? 0)) {
-                      int index = (_currentIndex ?? 0);
-                      _controller!.animateTo(++index);
-                    }
-                  } else {
-                    if (newIndex > (_currentIndex ?? 0)) {
-                      int index = (_currentIndex ?? 0);
-                      _controller!.animateTo(--index);
-                    }
-                  }
-                },
-              ),
-            ),
-            SizedBox(
-              height: height,
-              width: getTotalSubmitWidth,
-              child: Container(
-                color: (Theme.of(context).appBarTheme.backgroundColor ??
-                    Colors.blue),
-                child: RawMaterialButton(
-                  constraints: BoxConstraints(
-                    maxHeight: _kTabHeight,
-                    maxWidth: getTotalSubmitWidth,
-                  ),
-                  splashColor: widget.submitIconSplashColor,
-                  onPressed: () {
-                    setState(() {
-                      _isReorderable = false;
-                    });
-                  },
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: widget.indicatorWeight),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: widget.submitIconHorizontalPadding),
-                      child: Icon(
-                        widget.submitIcon,
-                        color: widget.submitIconColor,
-                        size: height! < submitIconSize
-                            ? height! * 2.5 / 3
-                            : submitIconSize.clamp(10, 70),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
     }
-    return tabBar!;
-  }
-
-  double get getTotalSubmitWidth {
-    return submitIconSize + widget.submitIconHorizontalPadding * 2;
-  }
-
-  double get submitIconSize {
-    return widget.submitIconSize.clamp(0, widget.preferredSize.height);
+    return Positioned(
+      bottom: 0,
+      right: 0,
+      left: 0,
+      height: widget.indicatorWeight,
+      child: SingleChildScrollView(
+        physics: widget.physics,
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        child: CustomPaint(
+          painter: _indicatorPainter,
+          child: SizedBox(
+            height: widget.indicatorWeight,
+            width: width,
+          ),
+        ),
+      ),
+    );
   }
 }
 
-extension GlobalKeyExt on GlobalKey {
-  Future<T?> showMenuFromKey<T>(
-    BuildContext context, {
-    required List<PopupMenuEntry<T>> items,
-    T? initialValue,
-    double? elevation,
-    String? semanticLabel,
-    ShapeBorder? shape,
-    Color? color,
-    bool useRootNavigator = false,
-
-    /// tabbar indicator weight recommended
-    double? topMargin,
-  }) {
-    Size size = currentContext!.size ?? Size.zero;
-    final RenderBox child = currentContext!.findRenderObject()! as RenderBox;
-    final RenderBox overlay =
-        Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
-    final RelativeRect position = RelativeRect.fromRect(
-      Rect.fromPoints(
-        child.localToGlobal(Offset(0, size.height + (topMargin ?? 0)),
-            ancestor: overlay),
-        child.localToGlobal(
-          child.size.bottomRight(Offset(0, topMargin ?? 0)),
-          ancestor: overlay,
-        ),
-      ),
-      Offset.zero & overlay.size,
-    );
-
-    return showMenu<T>(
-      context: context,
-      position: position,
-      items: items,
-      color: color,
-      elevation: elevation,
-      initialValue: initialValue,
-      semanticLabel: semanticLabel,
-      shape: shape,
-      useRootNavigator: useRootNavigator,
-    );
-  }
+class Reordered {
+  int oldIndex;
+  int newIndex;
+  Reordered({
+    required this.oldIndex,
+    required this.newIndex,
+  });
 }
