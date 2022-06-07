@@ -94,35 +94,12 @@ class _ReorderableTabBarPageState extends State<ReorderableTabBarPage> {
             tabs: tabs.map((e) => e.tab).toList(),
             indicatorSize: tabSizeIsLabel ? TabBarIndicatorSize.label : null,
             isScrollable: isScrollable,
-            submitIconHorizontalPadding: 8,
             indicatorColor: Colors.blueGrey.shade900,
             reorderingTabBackgroundColor: Colors.black45,
             indicatorWeight: 5,
             tabBorderRadius: BorderRadius.vertical(
               top: Radius.circular(8),
             ),
-            onLongPress: (key, index) async {
-              int? value = await key.showMenuFromKey<int>(
-                context,
-                topMargin: 5,
-                items: [
-                  PopupMenuItem(value: 1, child: Text("Reorder")),
-                  PopupMenuItem(value: 2, child: Text("Delete")),
-                ],
-              );
-
-              if (value != null) {
-                if (value == 1) {
-                  return true;
-                }
-                if (value == 2) {
-                  tabs.removeAt(index);
-                  setState(() {});
-                  return false;
-                }
-              }
-              return false;
-            },
             onReorder: (oldIndex, newIndex) async {
               String temp = tabs.removeAt(oldIndex);
               tabs.insert(newIndex, temp);
