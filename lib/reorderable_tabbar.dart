@@ -1,4 +1,4 @@
-library reorderable_tababar;
+library reorderable_tabbar;
 
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
