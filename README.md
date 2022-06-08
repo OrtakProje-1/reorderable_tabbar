@@ -2,6 +2,21 @@
 
 Reorderable TabBar package for Flutter
 
+## Example Video
+
+![video](assets/Reorderable_TabBar.mp4)
+
+## Example Usage
+
+```dart
+
+    ReorderableTabBar(
+      tabs: tabs,
+      onReorder: (oldIndex, newIndex){},
+    ),
+
+```
+
 ## Getting Started
 
 This project is a starting point for a Dart
