@@ -399,7 +399,6 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
   @override
   void initState() {
     super.initState();
-
     _controllers = LinkedScrollControllerGroup();
     _reorderController = _controllers.addAndGet();
     _scrollController = _controllers.addAndGet();
