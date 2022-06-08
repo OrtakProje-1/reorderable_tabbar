@@ -1,6 +1,6 @@
 name: reorderable_tabbar
-description: Reorderable TabBar package for Flutter
-version: 0.0.1
+description: Reorderable TabBar package for Flutter, with this package you can easily reorder tabs in TabBar.
+version: 1.0.0
 homepage: https://github.com/OrtakProje-1/reorderable_tabbar.git
 
 environment:
