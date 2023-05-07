@@ -29,9 +29,12 @@ class ReorderableTabBarPage extends StatefulWidget {
 
 extension StringExt on String {
   Text get text => Text(this);
-  Widget get tab {
-    return Tab(
-      text: "Tab $this",
+  Widget tab(int index) {
+    return ReorderableDragStartListener(
+      index: index,
+      child: Tab(
+        text: "Tab $this",
+      ),
     );
   }
 }
@@ -97,7 +100,8 @@ class _ReorderableTabBarPageState extends State<ReorderableTabBarPage> {
             ),
           ],
           bottom: ReorderableTabBar(
-            tabs: tabs.map((e) => e.tab).toList(),
+            buildDefaultDragHandles: false,
+            tabs: tabs.map((e) => e.tab(tabs.indexOf(e))).toList(),
             indicatorSize: tabSizeIsLabel ? TabBarIndicatorSize.label : null,
             isScrollable: isScrollable,
             reorderingTabBackgroundColor: Colors.black45,

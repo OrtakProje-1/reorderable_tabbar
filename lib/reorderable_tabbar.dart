@@ -301,8 +301,12 @@ class ReorderableTabBar extends StatefulWidget implements PreferredSizeWidget {
     this.tabBorderRadius,
     this.reorderingTabBackgroundColor,
     this.tabBackgroundColor,
+    this.buildDefaultDragHandles = true,
   })  : assert(indicator != null || (indicatorWeight > 0.0)),
         super(key: key);
+
+  /// if false use `ReorderableDragStartListener` or `ReorderableDelayedDragStartListener` widget
+  final bool buildDefaultDragHandles;
 
   final BorderRadius? tabBorderRadius;
 
@@ -1032,6 +1036,7 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
           height: height,
           width: double.maxFinite,
           child: ReorderableListView(
+            buildDefaultDragHandles: widget.buildDefaultDragHandles,
             cacheExtent: double.maxFinite,
             physics: widget.physics,
             scrollController: _reorderController,
