@@ -1,3 +1,5 @@
+## 1.0.5
+* Change example video url
 ## 1.0.4
 * Added default drag handles
 * Indicator positioning bug fix
