@@ -34,30 +34,33 @@ class _TabStyle extends AnimatedWidget {
   Widget build(BuildContext context) {
     final ThemeData themeData = Theme.of(context);
     final TabBarTheme tabBarTheme = TabBarTheme.of(context);
+    final TabBarTheme defaults = themeData.useMaterial3
+        ? _TabsDefaultsM3(context)
+        : _TabsDefaultsM2(context);
     final Animation<double> animation = listenable as Animation<double>;
 
     // To enable TextStyle.lerp(style1, style2, value), both styles must have
     // the same value of inherit. Force that to be inherit=true here.
-    final TextStyle defaultStyle = (labelStyle ??
-            tabBarTheme.labelStyle ??
-            themeData.primaryTextTheme.bodyText1!)
-        .copyWith(inherit: true);
+    final TextStyle defaultStyle =
+        (labelStyle ?? tabBarTheme.labelStyle ?? defaults.labelStyle!)
+            .copyWith(inherit: true);
     final TextStyle defaultUnselectedStyle = (unselectedLabelStyle ??
             tabBarTheme.unselectedLabelStyle ??
             labelStyle ??
-            themeData.primaryTextTheme.bodyText1!)
+            defaults.unselectedLabelStyle!)
         .copyWith(inherit: true);
     final TextStyle textStyle = selected
         ? TextStyle.lerp(defaultStyle, defaultUnselectedStyle, animation.value)!
         : TextStyle.lerp(
             defaultUnselectedStyle, defaultStyle, animation.value)!;
 
-    final Color selectedColor = labelColor ??
-        tabBarTheme.labelColor ??
-        themeData.primaryTextTheme.bodyText1!.color!;
+    final Color selectedColor =
+        labelColor ?? tabBarTheme.labelColor ?? defaults.labelColor!;
     final Color unselectedColor = unselectedLabelColor ??
         tabBarTheme.unselectedLabelColor ??
-        selectedColor.withAlpha(0xB2);
+        (themeData.useMaterial3
+            ? defaults.unselectedLabelColor!
+            : selectedColor.withAlpha(0xB2)); // 70% alpha
     final Color color = selected
         ? Color.lerp(selectedColor, unselectedColor, animation.value)!
         : Color.lerp(unselectedColor, selectedColor, animation.value)!;
@@ -299,7 +302,6 @@ class ReorderableTabBar extends StatefulWidget implements PreferredSizeWidget {
     this.reorderingTabBackgroundColor,
     this.tabBackgroundColor,
   })  : assert(indicator != null || (indicatorWeight > 0.0)),
-        assert(indicator != null),
         super(key: key);
 
   final BorderRadius? tabBorderRadius;
@@ -555,14 +557,41 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
   }
 
   Decoration get _indicator {
-    if (widget.indicator != null) return widget.indicator!;
+    final ThemeData theme = Theme.of(context);
     final TabBarTheme tabBarTheme = TabBarTheme.of(context);
-    if (tabBarTheme.indicator != null) return tabBarTheme.indicator!;
+    final TabBarTheme defaults = theme.useMaterial3
+        ? _TabsDefaultsM3(context)
+        : _TabsDefaultsM2(context);
 
-    Color color = widget.indicatorColor ?? Theme.of(context).indicatorColor;
+    if (widget.indicator != null) {
+      return widget.indicator!;
+    }
+    if (tabBarTheme.indicator != null) {
+      return tabBarTheme.indicator!;
+    }
 
+    Color color = widget.indicatorColor ??
+        (theme.useMaterial3
+            ? tabBarTheme.indicatorColor ?? defaults.indicatorColor!
+            : Theme.of(context).indicatorColor);
+    // ThemeData tries to avoid this by having indicatorColor avoid being the
+    // primaryColor. However, it's possible that the tab bar is on a
+    // Material that isn't the primaryColor. In that case, if the indicator
+    // color ends up matching the material's color, then this overrides it.
+    // When that happens, automatic transitions of the theme will likely look
+    // ugly as the indicator color suddenly snaps to white at one end, but it's
+    // not clear how to avoid that any further.
+    //
+    // The material's color might be null (if it's a transparency). In that case
+    // there's no good way for us to find out what the color is so we don't.
+    //
+    // TODO(xu-baolin): Remove automatic adjustment to white color indicator
+    // with a better long-term solution.
+    // https://github.com/flutter/flutter/pull/68171#pullrequestreview-517753917
     if (widget.automaticIndicatorColorAdjustment &&
-        color.value == Material.of(context)?.color?.value) color = Colors.white;
+        color.value == Material.maybeOf(context)?.color?.value) {
+      color = Colors.white;
+    }
 
     if (widget.defaultIndicator) {
       return UnderlineTabIndicator(
@@ -586,20 +615,8 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
   bool get _controllerIsValid => _controller?.animation != null;
 
   void _updateTabController() {
-    final TabController? newController =
+    final TabController newController =
         widget.controller ?? DefaultTabController.of(context);
-    assert(() {
-      if (newController == null) {
-        throw FlutterError(
-          'No TabController for ${widget.runtimeType}.\n'
-          'When creating a ${widget.runtimeType}, you must either provide an explicit '
-          'TabController using the "controller" property, or you must ensure that there '
-          'is a DefaultTabController above the ${widget.runtimeType}.\n'
-          'In this case, there was neither an explicit controller nor a default controller.',
-        );
-      }
-      return true;
-    }());
 
     if (newController == _controller) return;
 
@@ -1015,6 +1032,7 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
           height: height,
           width: double.maxFinite,
           child: ReorderableListView(
+            cacheExtent: double.maxFinite,
             physics: widget.physics,
             scrollController: _reorderController,
             scrollDirection: Axis.horizontal,
@@ -1080,6 +1098,99 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
       ),
     );
   }
+}
+
+// Hand coded defaults based on Material Design 2.
+class _TabsDefaultsM2 extends TabBarTheme {
+  const _TabsDefaultsM2(this.context)
+      : super(indicatorSize: TabBarIndicatorSize.tab);
+
+  final BuildContext context;
+
+  @override
+  Color? get indicatorColor => Theme.of(context).indicatorColor;
+
+  @override
+  Color? get labelColor => Theme.of(context).primaryTextTheme.bodyLarge!.color!;
+
+  @override
+  TextStyle? get labelStyle => Theme.of(context).primaryTextTheme.bodyLarge;
+
+  @override
+  TextStyle? get unselectedLabelStyle =>
+      Theme.of(context).primaryTextTheme.bodyLarge;
+
+  @override
+  InteractiveInkFeatureFactory? get splashFactory =>
+      Theme.of(context).splashFactory;
+}
+
+// BEGIN GENERATED TOKEN PROPERTIES - Tabs
+
+// Do not edit by hand. The code between the "BEGIN GENERATED" and
+// "END GENERATED" comments are generated from data in the Material
+// Design token database by the script:
+//   dev/tools/gen_defaults/bin/gen_defaults.dart.
+
+// Token database version: v0_143
+
+class _TabsDefaultsM3 extends TabBarTheme {
+  _TabsDefaultsM3(this.context)
+      : super(indicatorSize: TabBarIndicatorSize.label);
+
+  final BuildContext context;
+  late final ColorScheme _colors = Theme.of(context).colorScheme;
+  late final TextTheme _textTheme = Theme.of(context).textTheme;
+
+  @override
+  Color? get dividerColor => _colors.surfaceVariant;
+
+  @override
+  Color? get indicatorColor => _colors.primary;
+
+  @override
+  Color? get labelColor => _colors.primary;
+
+  @override
+  TextStyle? get labelStyle => _textTheme.titleSmall;
+
+  @override
+  Color? get unselectedLabelColor => _colors.onSurfaceVariant;
+
+  @override
+  TextStyle? get unselectedLabelStyle => _textTheme.titleSmall;
+
+  @override
+  MaterialStateProperty<Color?> get overlayColor {
+    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+      if (states.contains(MaterialState.selected)) {
+        if (states.contains(MaterialState.hovered)) {
+          return _colors.primary.withOpacity(0.08);
+        }
+        if (states.contains(MaterialState.focused)) {
+          return _colors.primary.withOpacity(0.12);
+        }
+        if (states.contains(MaterialState.pressed)) {
+          return _colors.primary.withOpacity(0.12);
+        }
+        return null;
+      }
+      if (states.contains(MaterialState.hovered)) {
+        return _colors.onSurface.withOpacity(0.08);
+      }
+      if (states.contains(MaterialState.focused)) {
+        return _colors.onSurface.withOpacity(0.12);
+      }
+      if (states.contains(MaterialState.pressed)) {
+        return _colors.primary.withOpacity(0.12);
+      }
+      return null;
+    });
+  }
+
+  @override
+  InteractiveInkFeatureFactory? get splashFactory =>
+      Theme.of(context).splashFactory;
 }
 
 class Reordered {

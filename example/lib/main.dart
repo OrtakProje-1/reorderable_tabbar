@@ -13,7 +13,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Reorderable TabBar',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        useMaterial3: true,
       ),
       home: const ReorderableTabBarPage(),
     );
@@ -31,15 +31,13 @@ extension StringExt on String {
   Text get text => Text(this);
   Widget get tab {
     return Tab(
-      text: this,
+      text: "Tab $this",
     );
   }
 }
 
 class _ReorderableTabBarPageState extends State<ReorderableTabBarPage> {
   PageController pageController = PageController();
-
-  int index = 9;
 
   List<String> tabs = [
     "1",
@@ -50,6 +48,13 @@ class _ReorderableTabBarPageState extends State<ReorderableTabBarPage> {
     "6",
     "7",
     "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
   ];
 
   bool isScrollable = false;
@@ -68,8 +73,6 @@ class _ReorderableTabBarPageState extends State<ReorderableTabBarPage> {
               padding: const EdgeInsets.all(8.0),
               child: Center(
                 child: Switch(
-                  activeColor: Colors.white,
-                  inactiveThumbColor: Colors.grey.shade400,
                   value: tabSizeIsLabel,
                   onChanged: (s) {
                     setState(() {
@@ -83,8 +86,6 @@ class _ReorderableTabBarPageState extends State<ReorderableTabBarPage> {
               padding: const EdgeInsets.all(8.0),
               child: Center(
                 child: Switch(
-                  activeColor: Colors.white,
-                  inactiveThumbColor: Colors.grey.shade400,
                   value: isScrollable,
                   onChanged: (s) {
                     setState(() {
@@ -99,7 +100,6 @@ class _ReorderableTabBarPageState extends State<ReorderableTabBarPage> {
             tabs: tabs.map((e) => e.tab).toList(),
             indicatorSize: tabSizeIsLabel ? TabBarIndicatorSize.label : null,
             isScrollable: isScrollable,
-            indicatorColor: Colors.blueGrey.shade900,
             reorderingTabBackgroundColor: Colors.black45,
             indicatorWeight: 5,
             tabBorderRadius: const BorderRadius.vertical(
@@ -115,16 +115,14 @@ class _ReorderableTabBarPageState extends State<ReorderableTabBarPage> {
         floatingActionButton: FloatingActionButton(
           child: const Icon(Icons.add),
           onPressed: () {
-            tabs.add(index.toString());
-            setState(() {
-              ++index;
-            });
+            tabs.add((tabs.length + 1).toString());
+            setState(() {});
           },
         ),
         body: TabBarView(
           children: tabs.map((e) {
             return Center(
-              child: (e + ". Page").text,
+              child: ("$e. Page").text,
             );
           }).toList(),
         ),
