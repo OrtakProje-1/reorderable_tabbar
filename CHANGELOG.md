@@ -1,6 +1,15 @@
+## 1.0.4
+* Added default drag handles
+* Indicator positioning bug fix
+* Change example video
+* Moved to material3
+## 1.0.2
+
+* Added example video
+
 ## 1.0.0
 
-* added dartdoc comments
+* Added dartdoc comments
 
 ## 0.0.1
 
