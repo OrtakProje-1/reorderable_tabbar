@@ -4,9 +4,9 @@ Reorderable TabBar package for Flutter
 
 ## Example Video
 
-https://user-images.githubusercontent.com/66565863/172720657-ec9d681e-3fde-4a6c-acc9-0f59fa7514a5.mp4
-
-
+<p align="left">
+  <img src="assets/Reorderable_TabBar.gif" height=500>
+</p>
 
 ## Example Usage
 
