@@ -30,11 +30,8 @@ class ReorderableTabBarPage extends StatefulWidget {
 extension StringExt on String {
   Text get text => Text(this);
   Widget tab(int index) {
-    return ReorderableDragStartListener(
-      index: index,
-      child: Tab(
-        text: "Tab $this",
-      ),
+    return Tab(
+      text: "Tab $this",
     );
   }
 }

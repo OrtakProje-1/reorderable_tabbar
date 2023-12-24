@@ -302,11 +302,15 @@ class ReorderableTabBar extends StatefulWidget implements PreferredSizeWidget {
     this.reorderingTabBackgroundColor,
     this.tabBackgroundColor,
     this.buildDefaultDragHandles = true,
+    this.useDelayedDragStartListener = false,
   })  : assert(indicator != null || (indicatorWeight > 0.0)),
         super(key: key);
 
-  /// if false use `ReorderableDragStartListener` or `ReorderableDelayedDragStartListener` widget
+  /// if false use `useDelayedDragStartListener` variable
   final bool buildDefaultDragHandles;
+
+  /// uses the widget `ReorderableDelayedDragStartListener` if true and `ReorderableDragStartListener` if false
+  final bool useDelayedDragStartListener;
 
   final BorderRadius? tabBorderRadius;
 
@@ -1014,6 +1018,20 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
     }
     for (var i = 0; i < wrappedTabs.length; i++) {
       Widget child = wrappedTabs[i];
+
+      if (!widget.buildDefaultDragHandles) {
+        if (widget.useDelayedDragStartListener) {
+          child = ReorderableDelayedDragStartListener(
+            index: i,
+            child: child,
+          );
+        } else {
+          child = ReorderableDragStartListener(
+            index: i,
+            child: child,
+          );
+        }
+      }
 
       wrappedTabs[i] = SizedBox(
         key: _tabExtendKeys[i],
