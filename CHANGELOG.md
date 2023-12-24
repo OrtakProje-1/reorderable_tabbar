@@ -1,3 +1,5 @@
+## 1.0.6
+* Fix [#3](https://github.com/OrtakProje-1/reorderable_tabbar/issues/3)
 ## 1.0.5
 * Change example video url
 ## 1.0.4
